@@ -4,6 +4,8 @@ using Orchard.Environment.Extensions;
 using River.DynamicForms.Elements;
 using System.Collections.Generic;
 using System.IO;
+using Orchard.Layouts.Elements;
+using Orchard.Layouts.Framework.Elements;
 
 namespace River.DynamicForms.Handlers
 {
@@ -12,38 +14,7 @@ namespace River.DynamicForms.Handlers
     {
         public override void Submitted(FormSubmittedEventContext context)
         {
-            foreach (var element in context.Form.Elements)
-            {
-                var fileFieldElement = element as FileField;
-
-                if (fileFieldElement==null)
-                    continue;
-
-                var postedFileValue = context.ValueProvider.GetValue(fileFieldElement.Name);
-
-                if (postedFileValue == null)
-                    return;
-
-                var postedFile = ((System.Web.HttpPostedFileBase[])(postedFileValue.RawValue))[0];
-
-                var path = Path.Combine(fileFieldElement.FilePath, Path.GetFileName(postedFile.FileName));
-
-                if (fileFieldElement.GenerateUnique)
-                {
-                    int count = 1;
-                    var pathPattern = Path.Combine(fileFieldElement.FilePath, string.Format("{0}_{{0}}{1}", Path.GetFileNameWithoutExtension(postedFile.FileName), Path.GetExtension(postedFile.FileName)));
-                    while (File.Exists(string.Format(pathPattern, count)))
-                    {
-                        count++;
-                    }
-
-                    path = string.Format(pathPattern, count);
-                }
-
-                context.Values[fileFieldElement.Name + ":size"] = postedFile.ContentLength.ToString();
-                context.Values[fileFieldElement.Name] = path;
-                fileFieldElement.PostedValue = path;
-            }
+            SetPathOnFileElements(context, context.Form.Elements);
         }
 
         public override void Validated(FormValidatedEventContext context)
@@ -101,5 +72,46 @@ namespace River.DynamicForms.Handlers
                 }
             }
         }
-    }
+        private void SetPathOnFileElements(FormSubmittedEventContext context, IList<Element> elements)
+        {
+            foreach (var element in elements)
+            {
+                var containerElement = element as Container;
+                if (containerElement != null)
+                {
+                    // Containers contain other elements, so loop these too.
+                    SetPathOnFileElements(context, containerElement.Elements);
+                }
+
+                var fileFieldElement = element as FileField;
+
+                if (fileFieldElement == null)
+                    continue;
+
+                var postedFileValue = context.ValueProvider.GetValue(fileFieldElement.Name);
+
+                if (postedFileValue == null)
+                    return;
+
+                var postedFile = ((System.Web.HttpPostedFileBase[])(postedFileValue.RawValue))[0];
+
+                var path = Path.Combine(fileFieldElement.FilePath, Path.GetFileName(postedFile.FileName));
+
+                if (fileFieldElement.GenerateUnique)
+                {
+                    int count = 1;
+                    var pathPattern = Path.Combine(fileFieldElement.FilePath, string.Format("{0}_{{0}}{1}", Path.GetFileNameWithoutExtension(postedFile.FileName), Path.GetExtension(postedFile.FileName)));
+                    while (File.Exists(string.Format(pathPattern, count)))
+                    {
+                        count++;
+                    }
+
+                    path = string.Format(pathPattern, count);
+                }
+
+                context.Values[fileFieldElement.Name + ":size"] = postedFile.ContentLength.ToString();
+                context.Values[fileFieldElement.Name] = path;
+                fileFieldElement.PostedValue = path;
+            }
+        }
 }
